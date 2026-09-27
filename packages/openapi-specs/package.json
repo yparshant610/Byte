@@ -1,0 +1,6 @@
+{
+  "name": "@repo/openapi-specs",
+  "version": "1.0.0",
+  "private": true,
+  "files": ["user-api.yaml"]
+}

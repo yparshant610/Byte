@@ -1,0 +1,24 @@
+{
+  "name": "@repo/database",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc -w",
+    "seed": "ts-node src/seed.ts",
+    "seed:supabase": "npx tsx src/seed-supabase.ts"
+  },
+  "dependencies": {
+    "@repo/shared-utils": "workspace:*",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@repo/tsconfig": "workspace:*",
+    "@types/node": "^20.14.2",
+    "@types/pg": "^8.23.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

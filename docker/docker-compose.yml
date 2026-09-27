@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # --- REDIS IN-MEMORY ENGINE ---
+  redis:
+    image: redis:7-alpine
+    container_name: foodbytes-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- POSTGRESQL WITH POSTGIS (SUPABASE COMPATIBLE) ---
+  postgres:
+    image: postgis/postgis:15-3.3-alpine
+    container_name: foodbytes-postgres
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: foodbytes_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- REDIS WEB GUI (OPTIONAL DEV INSPECTION) ---
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: foodbytes-redisinsight
+    ports:
+      - '5540:5540'
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:

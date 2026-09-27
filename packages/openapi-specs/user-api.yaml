@@ -1,0 +1,340 @@
+openapi: 3.0.3
+info:
+  title: Food Byte - User Backend API Specification
+  description: Contract-first OpenAPI specification for the Food Byte consumer client application.
+  version: 1.0.0
+servers:
+  - url: http://localhost:4000/api/v1
+    description: Local Development User Service
+paths:
+  # ==========================================
+  # AUTHENTICATION (PUBLIC)
+  # ==========================================
+  /auth/signup:
+    post:
+      summary: Request OTP for initial consumer signup
+      description: Initiates registration sequence by dispatching a verification OTP via NodeMailer. Enforces Token Bucket rate limiting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: consumer@foodbytes.app
+      responses:
+        '200':
+          description: OTP dispatched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Verification OTP sent to your email." }
+        '429':
+          description: Rate limit exceeded (Token bucket full)
+
+  /auth/verify-otp:
+    post:
+      summary: Verify OTP and create password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp, password]
+              properties:
+                email: { type: string, format: email }
+                otp: { type: string, example: "492018" }
+                password: { type: string, minLength: 8, example: "SecurePass@2026" }
+      responses:
+        '201':
+          description: User registered successfully, returns JWT Bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /auth/signin:
+    post:
+      summary: Authenticate with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid email or password
+
+  # ==========================================
+  # USER PROFILE & PERMISSIONS
+  # ==========================================
+  /user/location:
+    post:
+      summary: Update consumer live GPS coordinates
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude: { type: number, example: 12.9716 }
+                longitude: { type: number, example: 77.5946 }
+      responses:
+        '200':
+          description: Coordinates updated successfully
+
+  # ==========================================
+  # RESTAURANT DISCOVERY (<= 10 KM)
+  # ==========================================
+  /restaurants/nearby:
+    get:
+      summary: Discover nearby restaurants within constant 10 km radius
+      description: "Queries Redis Geospatial index (restaurants:geo) and caches metadata for sub-millisecond retrieval. Clamped to maximum 10 km radius."
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number, example: 12.9716 }
+        - name: lng
+          in: query
+          required: true
+          schema: { type: number, example: 77.5946 }
+        - name: radiusKm
+          in: query
+          required: false
+          schema: { type: number, default: 10, maximum: 10 }
+      responses:
+        '200':
+          description: List of nearby restaurants sorted by distance
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NearbyRestaurant'
+
+  # ==========================================
+  # REDIS SHOPPING CART
+  # ==========================================
+  /cart:
+    get:
+      summary: Fetch consumer active shopping cart
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Active shopping cart details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+    delete:
+      summary: Clear entire shopping cart
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cart cleared successfully
+
+  /cart/items:
+    post:
+      summary: Add line item with customization options to Redis cart
+      security:
+        - BearerAuth: []
+      description: "Enforces single-restaurant integrity. Rejects addition with 409 Conflict if items from another restaurant are already in cart, unless clearExisting is set to true."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddToCartInput'
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '409':
+          description: Conflict - Item is from another restaurant
+
+  /cart/items/{itemId}:
+    patch:
+      summary: Update quantity of a cart item
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Updated cart
+
+    delete:
+      summary: Remove a specific item from cart
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Updated cart
+
+  # ==========================================
+  # DISPATCH & DRIVER ASSIGNMENT
+  # ==========================================
+  /dispatch/assign-order/{orderId}:
+    post:
+      summary: Query Redis for closest available delivery partner and claim atomically
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Driver assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assignedDriverId: { type: string }
+                  distanceKm: { type: number }
+                  status: { type: string, example: "ASSIGNED" }
+        '404':
+          description: No drivers available within radius
+
+  # ==========================================
+  # WEBHOOKS
+  # ==========================================
+  /payments/razorpay-webhook:
+    post:
+      summary: Webhook for Razorpay payment captures and split accounting
+      responses:
+        '200':
+          description: Webhook received and validated
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        user:
+          type: object
+          properties:
+            id: { type: string }
+            email: { type: string }
+            role: { type: string }
+
+    NearbyRestaurant:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        cuisineTypes: { type: array, items: { type: string } }
+        rating: { type: number }
+        averagePrepTimeMinutes: { type: integer }
+        bannerUrl: { type: string }
+        distanceKm: { type: number }
+        location:
+          type: object
+          properties:
+            lat: { type: number }
+            lng: { type: number }
+
+    Cart:
+      type: object
+      properties:
+        restaurantId: { type: string }
+        restaurantName: { type: string }
+        subtotal: { type: number }
+        itemCount: { type: integer }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+
+    CartItem:
+      type: object
+      properties:
+        itemId: { type: string }
+        name: { type: string }
+        quantity: { type: integer }
+        basePrice: { type: number }
+        unitPrice: { type: number }
+        itemTotal: { type: number }
+        selectedOptions:
+          type: array
+          items:
+            type: object
+            properties:
+              groupName: { type: string }
+              choiceName: { type: string }
+              additionalPrice: { type: number }
+
+    AddToCartInput:
+      type: object
+      required: [restaurantId, restaurantName, itemId, name, quantity, basePrice]
+      properties:
+        restaurantId: { type: string }
+        restaurantName: { type: string }
+        itemId: { type: string }
+        name: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        basePrice: { type: number }
+        clearExisting: { type: boolean, default: false }
+        selectedOptions:
+          type: array
+          items:
+            type: object
+            properties:
+              groupName: { type: string }
+              choiceName: { type: string }
+              additionalPrice: { type: number }
