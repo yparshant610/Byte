@@ -52,3 +52,7 @@ redis_data/
 coverage/
 .nyc_output/
 .system_generated/
+
+# Design exports & screen assets
+stitch_full_project_revamp/
+
