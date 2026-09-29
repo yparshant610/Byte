@@ -314,14 +314,195 @@ paths:
           description: No drivers available within radius
 
   # ==========================================
-  # WEBHOOKS
+  # ORDERS & LIFECYCLE STATE MACHINE
+  # ==========================================
+  /orders/checkout:
+    post:
+      summary: Checkout active shopping cart and initiate order
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutInput'
+      responses:
+        '201':
+          description: Order created with 80/20 split breakdown and Razorpay order ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
+                  razorpayOrderId: { type: string, example: "order_rzp_1727435000" }
+                  keyId: { type: string, example: "rzp_test_key_id" }
+        '400':
+          description: Cart is empty or invalid checkout payload
+
+  /orders/{orderId}:
+    get:
+      summary: Fetch order details and split payout by ID
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Order not found
+
+  /orders/{orderId}/status:
+    patch:
+      summary: Transition order lifecycle status with role-guarded state machine
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderStatusInput'
+      responses:
+        '200':
+          description: Order status updated and broadcasted via WebSocket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Invalid state transition
+        '403':
+          description: Role not permitted for this transition
+        '409':
+          description: Terminal state immutable
+
+  /orders/{orderId}/refund:
+    post:
+      summary: Authorize order refund and dispute reconciliation (ADMIN only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundOrderInput'
+      responses:
+        '200':
+          description: Refund processed and ledger updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  refundedAmount: { type: number }
+                  status: { type: string, example: "REFUNDED_AND_RECONCILED" }
+        '403':
+          description: Only ADMIN can authorize refunds
+
+  /orders/{orderId}/reviews:
+    post:
+      summary: Submit post-delivery dual star ratings for restaurant food and driver
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitReviewInput'
+      responses:
+        '201':
+          description: Dual review recorded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  reviewId: { type: string }
+                  message: { type: string }
+        '400':
+          description: Order not delivered yet
+        '409':
+          description: Review already submitted
+
+  /orders/{orderId}/tip:
+    post:
+      summary: Add driver tip top-up (100% disbursed to driver payout)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTipInput'
+      responses:
+        '200':
+          description: Tip added and driver ledger updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  # ==========================================
+  # PAYMENTS & WEBHOOKS
   # ==========================================
   /payments/razorpay-webhook:
     post:
-      summary: Webhook for Razorpay payment captures and split accounting
+      summary: Webhook for Razorpay payment captures, failures, and automated 80/20 split ledger accounting
+      parameters:
+        - name: x-razorpay-signature
+          in: header
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
       responses:
         '200':
           description: Webhook received and validated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received: { type: boolean }
+                  status: { type: string }
+        '403':
+          description: Signature verification failed
 
 components:
   securitySchemes:
@@ -407,3 +588,85 @@ components:
               groupName: { type: string }
               choiceName: { type: string }
               additionalPrice: { type: number }
+
+    CheckoutInput:
+      type: object
+      required: [destinationLat, destinationLng]
+      properties:
+        deliveryAddress: { type: string, example: "Penthouse 4B, MG Road Boulevard" }
+        destinationLat: { type: number, example: 12.9716 }
+        destinationLng: { type: number, example: 77.5946 }
+        deliveryNotes: { type: string, example: "Ring doorbell twice" }
+        driverTip: { type: number, example: 3.00, default: 0 }
+
+    UpdateOrderStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, PREPARING, READY_FOR_PICKUP, OUT_FOR_DELIVERY, DELIVERED, CANCELLED]
+        reason: { type: string }
+
+    SubmitReviewInput:
+      type: object
+      properties:
+        foodRating: { type: integer, minimum: 1, maximum: 5, example: 5 }
+        driverRating: { type: integer, minimum: 1, maximum: 5, example: 5 }
+        foodReview: { type: string, example: "Crust was authentic wood-fired perfection!" }
+        driverReview: { type: string, example: "Prompt, warm and courteous!" }
+        complimentTags:
+          type: array
+          items: { type: string }
+          example: ["Fast Delivery", "Hot Food", "Great Packaging"]
+
+    AddTipInput:
+      type: object
+      required: [tipAmount]
+      properties:
+        tipAmount: { type: number, minimum: 1, example: 5.00 }
+
+    RefundOrderInput:
+      type: object
+      required: [reason]
+      properties:
+        amount: { type: number, example: 40.12 }
+        reason: { type: string, example: "Missing items or compromised packaging" }
+
+    OrderSplitBreakdown:
+      type: object
+      properties:
+        platformCommission: { type: number, description: "20% Byte Add platform fee" }
+        restaurantPayout: { type: number, description: "80% of food subtotal" }
+        driverPayout: { type: number, description: "80% of delivery fee + 100% tip" }
+        vendorDriverTotalPayout: { type: number, description: "Total 80% vendor/driver payout" }
+
+    Order:
+      type: object
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        restaurantId: { type: string }
+        restaurantName: { type: string }
+        driverId: { type: string }
+        status: { type: string, enum: [PENDING, ACCEPTED, PREPARING, READY_FOR_PICKUP, OUT_FOR_DELIVERY, DELIVERED, CANCELLED] }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              itemId: { type: string }
+              name: { type: string }
+              quantity: { type: integer }
+              unitPrice: { type: number }
+              totalPrice: { type: number }
+        subtotal: { type: number }
+        taxAmount: { type: number }
+        deliveryFee: { type: number }
+        driverTip: { type: number }
+        totalAmount: { type: number }
+        split: { $ref: '#/components/schemas/OrderSplitBreakdown' }
+        deliveryAddress: { type: string }
+        deliveryNotes: { type: string }
+        createdAt: { type: number }
+        updatedAt: { type: number }

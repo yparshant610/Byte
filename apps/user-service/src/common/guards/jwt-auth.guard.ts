@@ -30,10 +30,11 @@ export class JwtAuthGuard implements CanActivate {
       // Mock bypass for development if mock user header is passed
       const mockUserId = req?.headers?.['x-user-id'];
       if (mockUserId) {
+        const role = (req?.headers?.['x-user-role'] as any) || 'CONSUMER';
         req.user = {
           sub: mockUserId,
           email: `${mockUserId}@foodbytes.app`,
-          role: 'CONSUMER',
+          role,
         } as JwtPayload;
         return true;
       }
@@ -51,10 +52,11 @@ export class JwtAuthGuard implements CanActivate {
     // In production, Supabase / JWT verify token signature
     // For local development, decode or verify payload
     try {
+      const role = (req?.headers?.['x-user-role'] as any) || 'CONSUMER';
       const payload: JwtPayload = {
         sub: token.startsWith('user_') ? token : 'u0000001-0000-0000-0000-000000000001',
         email: 'consumer@foodbytes.app',
-        role: 'CONSUMER',
+        role,
       };
       req.user = payload;
       req.token = token;
