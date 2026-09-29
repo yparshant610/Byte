@@ -29,12 +29,19 @@ export class InMemoryRedisMock {
     return this.kv.get(key) ?? null;
   }
 
-  async set(key: string, value: string, ...args: any[]): Promise<'OK'> {
+  async set(key: string, value: string, ...args: any[]): Promise<'OK' | null> {
+    const isNx = args.some(a => typeof a === 'string' && a.toUpperCase() === 'NX');
+    if (isNx && !this.isExpired(key) && this.kv.has(key)) {
+      return null;
+    }
+
     this.kv.set(key, value);
-    if (args.length >= 2 && typeof args[0] === 'string' && args[0].toUpperCase() === 'EX') {
-      const seconds = Number(args[1]);
-      if (!isNaN(seconds)) {
-        this.ttls.set(key, Date.now() + seconds * 1000);
+    for (let i = 0; i < args.length; i++) {
+      if (typeof args[i] === 'string' && args[i].toUpperCase() === 'EX' && i + 1 < args.length) {
+        const seconds = Number(args[i + 1]);
+        if (!isNaN(seconds)) {
+          this.ttls.set(key, Date.now() + seconds * 1000);
+        }
       }
     }
     return 'OK';

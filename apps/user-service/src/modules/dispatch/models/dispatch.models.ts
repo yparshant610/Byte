@@ -22,13 +22,20 @@ export class DriverLocationDto {
 }
 
 export class AssignOrderInputDto {
-  @ApiProperty({ example: 12.9780 })
-  @IsNumber()
-  restaurantLat: number;
+  @ApiProperty({ example: '30000000-0000-0000-0000-000000000001', required: false, description: 'If provided, coordinates are fetched via GEOPOS restaurants:geo in Redis' })
+  @IsOptional()
+  @IsString()
+  restaurantId?: string;
 
-  @ApiProperty({ example: 77.6000 })
+  @ApiProperty({ example: 12.9780, required: false })
+  @IsOptional()
   @IsNumber()
-  restaurantLng: number;
+  restaurantLat?: number;
+
+  @ApiProperty({ example: 77.6000, required: false })
+  @IsOptional()
+  @IsNumber()
+  restaurantLng?: number;
 
   @ApiProperty({ example: 5, required: false })
   @IsOptional()

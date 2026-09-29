@@ -253,6 +253,27 @@ export class RedisGeoStore {
     return candidates;
   }
 
+  async getRestaurantLocation(restaurantId: string): Promise<{ lat: number; lng: number } | null> {
+    const client = this.redisWrapper.getClient();
+    const positions = await (client as any).geopos(REDIS_KEYS.RESTAURANTS_GEO, restaurantId);
+    if (!positions || !positions[0]) return null;
+    return {
+      lng: parseFloat(positions[0][0]),
+      lat: parseFloat(positions[0][1]),
+    };
+  }
+
+  async getRestaurantMeta(restaurantId: string): Promise<RestaurantMeta | null> {
+    const client = this.redisWrapper.getClient();
+    const raw = await client.get(`${REDIS_KEYS.RESTAURANT_META_PREFIX}${restaurantId}:meta`);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
   async atomicAssignDriver(
     orderId: string,
     restLat: number,
@@ -260,33 +281,60 @@ export class RedisGeoStore {
     searchRadiusKm = 5,
   ): Promise<{ assignedDriverId: string; distanceKm: number }> {
     const client = this.redisWrapper.getClient();
-    const candidates = await this.findCandidateDrivers(restLat, restLng, searchRadiusKm, 5);
+    const lockKey = `${REDIS_KEYS.ORDER_DISPATCH_LOCK}${orderId}`;
 
-    if (candidates.length === 0) {
-      throw new DriverUnavailableException(orderId, searchRadiusKm);
+    // Acquire distributed lock to prevent race-condition concurrent dispatch
+    const lockAcquired = await client.set(lockKey, 'locked', 'NX', 'EX', 5);
+    if (!lockAcquired) {
+      throw new Error(`Order ${orderId} dispatch is currently locked by another concurrent process.`);
     }
 
-    // Attempt atomic reservation on closest available candidate
-    for (const candidate of candidates) {
-      const driverId = candidate.driverId;
-      // 1. Remove from available set to prevent other concurrent assignments
-      const removed = await client.zrem(REDIS_KEYS.DRIVERS_AVAILABLE_GEO, driverId);
-      if (removed > 0) {
-        // Driver was successfully claimed
-        await client.set(
-          `${REDIS_KEYS.DRIVER_STATUS_PREFIX}${driverId}:status`,
-          `ASSIGNED_TO_ORDER_${orderId}`,
-          'EX',
-          1800, // 30 minutes reservation
-        );
+    try {
+      const candidates = await this.findCandidateDrivers(restLat, restLng, searchRadiusKm, 5);
 
-        return {
-          assignedDriverId: driverId,
-          distanceKm: candidate.distanceKm,
-        };
+      if (candidates.length === 0) {
+        throw new DriverUnavailableException(orderId, searchRadiusKm);
       }
-    }
 
-    throw new DriverUnavailableException(orderId, searchRadiusKm);
+      // Attempt atomic reservation on closest available candidate
+      for (const candidate of candidates) {
+        const driverId = candidate.driverId;
+        // 1. Remove from available set to prevent other concurrent assignments
+        const removed = await client.zrem(REDIS_KEYS.DRIVERS_AVAILABLE_GEO, driverId);
+        if (removed > 0) {
+          // Driver was successfully claimed; mark status as RESERVED_FOR_ORDER_{orderId}
+          await client.set(
+            `${REDIS_KEYS.DRIVER_STATUS_PREFIX}${driverId}:status`,
+            `RESERVED_FOR_ORDER_${orderId}`,
+            'EX',
+            1800, // 30 minutes reservation
+          );
+
+          return {
+            assignedDriverId: driverId,
+            distanceKm: candidate.distanceKm,
+          };
+        }
+      }
+
+      throw new DriverUnavailableException(orderId, searchRadiusKm);
+    } finally {
+      await client.del(lockKey);
+    }
+  }
+
+  // ==========================================
+  // 3. SERVER-SIDE JWT TOKEN BLACKLISTING
+  // ==========================================
+
+  async blacklistToken(token: string, ttlSeconds = 604800): Promise<void> {
+    const client = this.redisWrapper.getClient();
+    await client.set(`${REDIS_KEYS.TOKEN_BLACKLIST_PREFIX}${token}`, 'revoked', 'EX', ttlSeconds);
+  }
+
+  async isTokenBlacklisted(token: string): Promise<boolean> {
+    const client = this.redisWrapper.getClient();
+    const res = await client.get(`${REDIS_KEYS.TOKEN_BLACKLIST_PREFIX}${token}`);
+    return res !== null;
   }
 }

@@ -35,7 +35,12 @@ export class CartService {
     itemId: string,
     input: UpdateCartItemInput,
   ): Promise<CartType | null> {
-    const updated = await this.cartStore.updateItemQuantity(userId, itemId, input.quantity);
+    const updated = await this.cartStore.updateItem(
+      userId,
+      itemId,
+      input.quantity,
+      input.selectedOptions,
+    );
     return updated as CartType | null;
   }
 

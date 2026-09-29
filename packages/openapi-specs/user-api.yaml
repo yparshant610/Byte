@@ -84,6 +84,22 @@ paths:
         '401':
           description: Invalid email or password
 
+  /auth/logout:
+    post:
+      summary: Logout and blacklist JWT session in Redis
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Session invalidated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Successfully logged out. Session token has been invalidated." }
+
   # ==========================================
   # USER PROFILE & PERMISSIONS
   # ==========================================
@@ -135,6 +151,33 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/NearbyRestaurant'
+
+  /restaurants/geo-index:
+    post:
+      summary: Admin/Merchant sync to index or invalidate restaurant in Redis Geospatial engine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [restaurantId]
+              properties:
+                restaurantId: { type: string }
+                name: { type: string }
+                lat: { type: number }
+                lng: { type: number }
+                operationalStatus: { type: string, enum: [ACTIVE, INACTIVE, SUSPENDED, PENDING_APPROVAL] }
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  action: { type: string, example: "INDEXED_IN_REDIS" }
 
   # ==========================================
   # REDIS SHOPPING CART
@@ -220,6 +263,32 @@ paths:
   # ==========================================
   # DISPATCH & DRIVER ASSIGNMENT
   # ==========================================
+  /drivers/location:
+    post:
+      summary: Telemetry Ingestion for driver GPS mobile ping
+      description: Driver mobile app sends GPS pings every 10–15 seconds. Updates `drivers:available:geo` and sets heartbeat `driver:{driverId}:status`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [driverId, lat, lng]
+              properties:
+                driverId: { type: string }
+                lat: { type: number, example: 12.9770 }
+                lng: { type: number, example: 77.6010 }
+                status: { type: string, enum: [ONLINE, BUSY, OFFLINE], default: ONLINE }
+      responses:
+        '200':
+          description: Location registered in Redis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+
   /dispatch/assign-order/{orderId}:
     post:
       summary: Query Redis for closest available delivery partner and claim atomically

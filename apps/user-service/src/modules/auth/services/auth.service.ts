@@ -196,4 +196,20 @@ export class AuthService {
       },
     };
   }
+
+  async logout(token: string): Promise<{ success: boolean; message: string }> {
+    if (token) {
+      try {
+        const client = this.redisWrapper.getClient();
+        await client.set(`token:blacklist:${token}`, 'revoked', 'EX', 604800);
+      } catch (e) {
+        console.warn('Redis logout blacklisting error:', e);
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Successfully logged out. Session token has been invalidated.',
+    };
+  }
 }

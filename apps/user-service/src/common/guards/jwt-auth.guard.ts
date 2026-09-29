@@ -1,10 +1,18 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Inject, Injectable, Optional, UnauthorizedException } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
+import { RedisGeoStore } from '@repo/redis-cache';
 import { extractBearerToken, JwtPayload } from '@repo/shared-utils';
+import { REDIS_GEO_STORE } from '../../modules/redis/redis-provider.module';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  constructor(
+    @Optional()
+    @Inject(REDIS_GEO_STORE)
+    private readonly geoStore?: RedisGeoStore,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     let req: any;
 
     if ((context.getType() as string) === 'graphql') {
@@ -32,6 +40,14 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing or invalid Authorization header.');
     }
 
+    // Check server-side JWT blacklist in Redis
+    if (this.geoStore) {
+      const isBlacklisted = await this.geoStore.isTokenBlacklisted(token);
+      if (isBlacklisted) {
+        throw new UnauthorizedException('Token has been invalidated (session logged out).');
+      }
+    }
+
     // In production, Supabase / JWT verify token signature
     // For local development, decode or verify payload
     try {
@@ -41,6 +57,7 @@ export class JwtAuthGuard implements CanActivate {
         role: 'CONSUMER',
       };
       req.user = payload;
+      req.token = token;
       return true;
     } catch {
       throw new UnauthorizedException('Expired or malformed JWT token.');

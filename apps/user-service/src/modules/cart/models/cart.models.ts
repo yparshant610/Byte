@@ -154,9 +154,18 @@ export class AddToCartInput {
 
 @InputType()
 export class UpdateCartItemInput {
-  @Field(() => Int)
-  @ApiProperty({ example: 3 })
+  @Field(() => Int, { nullable: true })
+  @ApiProperty({ example: 3, required: false })
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  quantity: number;
+  quantity?: number;
+
+  @Field(() => [SelectedOptionInput], { nullable: true })
+  @ApiProperty({ type: [SelectedOptionInput], required: false })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SelectedOptionInput)
+  selectedOptions?: SelectedOptionInput[];
 }

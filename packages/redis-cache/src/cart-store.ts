@@ -117,20 +117,36 @@ export class RedisCartStore {
     return cart;
   }
 
-  async updateItemQuantity(userId: string, itemId: string, quantity: number): Promise<CartData | null> {
+  async updateItem(
+    userId: string,
+    itemId: string,
+    quantity?: number,
+    selectedOptions?: CartSelectedOption[],
+  ): Promise<CartData | null> {
     const client = this.redisWrapper.getClient();
     const key = this.getCartKey(userId);
     const cart = await this.getCart(userId);
     if (!cart) return null;
 
-    if (quantity <= 0) {
-      cart.items = cart.items.filter(it => it.itemId !== itemId);
-    } else {
-      const item = cart.items.find(it => it.itemId === itemId);
-      if (item) {
+    const item = cart.items.find(it => it.itemId === itemId);
+    if (!item) return cart;
+
+    if (quantity !== undefined) {
+      if (quantity <= 0) {
+        cart.items = cart.items.filter(it => it.itemId !== itemId);
+      } else {
         item.quantity = quantity;
-        item.itemTotal = parseFloat((item.unitPrice * quantity).toFixed(2));
       }
+    }
+
+    if (selectedOptions !== undefined) {
+      item.selectedOptions = selectedOptions;
+      const optionsTotal = selectedOptions.reduce((sum, opt) => sum + opt.additionalPrice, 0);
+      item.unitPrice = parseFloat((item.basePrice + optionsTotal).toFixed(2));
+    }
+
+    if (cart.items.includes(item)) {
+      item.itemTotal = parseFloat((item.unitPrice * item.quantity).toFixed(2));
     }
 
     if (cart.items.length === 0) {
@@ -143,8 +159,17 @@ export class RedisCartStore {
     return cart;
   }
 
+  async updateItemQuantity(
+    userId: string,
+    itemId: string,
+    quantity: number,
+    selectedOptions?: CartSelectedOption[],
+  ): Promise<CartData | null> {
+    return this.updateItem(userId, itemId, quantity, selectedOptions);
+  }
+
   async removeItem(userId: string, itemId: string): Promise<CartData | null> {
-    return this.updateItemQuantity(userId, itemId, 0);
+    return this.updateItem(userId, itemId, 0);
   }
 
   async clearCart(userId: string): Promise<boolean> {

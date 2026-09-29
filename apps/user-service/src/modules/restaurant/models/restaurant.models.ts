@@ -69,3 +69,35 @@ export class NearbyRestaurantType {
   @ApiProperty({ example: 0.92, description: 'Distance in kilometers from user' })
   distanceKm: number;
 }
+
+export class GeoIndexRestaurantInput {
+  @ApiProperty({ example: '30000000-0000-0000-0000-000000000001' })
+  restaurantId: string;
+
+  @ApiProperty({ example: "Tony's Artisan Pizza", required: false })
+  name?: string;
+
+  @ApiProperty({ example: ['Italian', 'Pizza'], required: false })
+  cuisine?: string[];
+
+  @ApiProperty({ example: 4.8, required: false })
+  rating?: number;
+
+  @ApiProperty({ example: 20, required: false })
+  prepTimeMinutes?: number;
+
+  @ApiProperty({ example: 'https://images.unsplash.com/photo-1513104890138-7c749659a591', required: false })
+  bannerUrl?: string;
+
+  @ApiProperty({ example: 12.9780, required: false })
+  lat?: number;
+
+  @ApiProperty({ example: 77.6000, required: false })
+  lng?: number;
+
+  @ApiProperty({ example: '42 Wood Street, Bangalore', required: false })
+  address?: string;
+
+  @ApiProperty({ example: 'ACTIVE', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING_APPROVAL'], required: false })
+  operationalStatus?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_APPROVAL';
+}

@@ -13,7 +13,7 @@ import {
 
 async function runTestSuite() {
   console.log(`\n======================================================`);
-  console.log(`🧪 RUNNING FOOD BYTE E2E VERIFICATION TEST SUITE`);
+  console.log(`🧪 RUNNING FOOD BYTE MILESTONE 2 E2E TEST SUITE`);
   console.log(`======================================================\n`);
 
   // Initialize In-Memory Redis Engine
@@ -38,7 +38,7 @@ async function runTestSuite() {
   }
 
   // -------------------------------------------------------------------------
-  // TEST SUITE 1: REDIS SHOPPING CART ENGINE
+  // TEST SUITE 1: REDIS SHOPPING CART ENGINE (/api/v1/cart)
   // -------------------------------------------------------------------------
   console.log(`\n--- [1] Testing Redis Shopping Cart Engine ---`);
   const testUser = 'user_alex_01';
@@ -97,10 +97,17 @@ async function runTestSuite() {
   assert(cart2.restaurantId === 'rest_burger_lab_02', 'Cart successfully replaced when clearExisting: true is passed');
   assert(cart2.subtotal === 11.50, 'New cart subtotal reflects only the new restaurant');
 
-  // 1.4 Clear cart
+  // 1.4 Update item quantity and options dynamically (PATCH /cart/items/:itemId)
+  const cartUpdated = await cartStore.updateItem(testUser, 'dish_cheeseburger', 2, [
+    { groupName: 'Extras', choiceName: 'Truffle Aioli Dip', additionalPrice: 1.50 },
+  ]);
+  // unitPrice = 11.50 + 1.50 = 13.00, total = 13.00 * 2 = 26.00
+  assert(cartUpdated?.subtotal === 26.00, `Item options and quantity updated dynamically ($26.00 vs ${cartUpdated?.subtotal})`);
+
+  // 1.5 Clear cart
   await cartStore.clearCart(testUser);
   const clearedCart = await cartStore.getCart(testUser);
-  assert(clearedCart === null, 'Cart cleared successfully from Redis');
+  assert(clearedCart === null, 'Cart cleared successfully from Redis (DELETE /cart)');
 
   // -------------------------------------------------------------------------
   // TEST SUITE 2: RESTAURANT GEOSPATIAL DISCOVERY (<= 10 KM)
@@ -173,6 +180,18 @@ async function runTestSuite() {
     'Airport Highway Diner (> 10 km) is strictly excluded by Redis Geospatial search',
   );
 
+  // 2.2 Test GEOPOS resolution
+  const tonysPos = await geoStore.getRestaurantLocation('r_tonys');
+  assert(
+    tonysPos !== null && Math.abs(tonysPos.lat - 12.9780) < 0.001,
+    `GEOPOS successfully resolved coordinates for r_tonys (${tonysPos?.lat}, ${tonysPos?.lng})`,
+  );
+
+  // 2.3 Test Admin/Merchant Sync: remove/invalidate inactive restaurant
+  await geoStore.removeRestaurant('r_sushi');
+  const nearbyAfterRemoval = await geoStore.findNearbyRestaurants(userLoc.lat, userLoc.lng, 10);
+  assert(!nearbyAfterRemoval.some(n => n.restaurant.id === 'r_sushi'), 'Admin sync: Inactive restaurant removed from Redis index');
+
   // -------------------------------------------------------------------------
   // TEST SUITE 3: DRIVER TELEMETRY & PROXIMITY DISPATCH
   // -------------------------------------------------------------------------
@@ -205,10 +224,15 @@ async function runTestSuite() {
   );
   assert(candidatePool.length === 1 && candidatePool[0].driverId === 'driver_vikram_02', 'Next order will match Vikram Singh');
 
+  // Verify driver heartbeat status is RESERVED_FOR_ORDER_{orderId}
+  const client = redisWrapper.getClient();
+  const driverStatus = await client.get(`driver:driver_rajesh_01:status`);
+  assert(driverStatus === `RESERVED_FOR_ORDER_${orderId}`, `Driver status set to RESERVED_FOR_ORDER_${orderId} (${driverStatus})`);
+
   // -------------------------------------------------------------------------
-  // TEST SUITE 4: TOKEN BUCKET RATE LIMITING
+  // TEST SUITE 4: TOKEN BUCKET & JWT BLACKLISTING
   // -------------------------------------------------------------------------
-  console.log(`\n--- [4] Testing Token Bucket Rate Limiting ---`);
+  console.log(`\n--- [4] Testing Token Bucket & JWT Blacklisting ---`);
   const rateLimitKey = 'test_consumer_otp';
   let rateLimitCaught = false;
 
@@ -225,6 +249,15 @@ async function runTestSuite() {
     }
   }
   assert(rateLimitCaught, 'Token Bucket algorithm successfully triggered RateLimitExceededException on exhaustion');
+
+  // Test server-side JWT blacklisting on logout
+  const testToken = 'sample_jwt_token_for_logout_test_123';
+  const beforeBlacklist = await geoStore.isTokenBlacklisted(testToken);
+  assert(!beforeBlacklist, 'Token is not blacklisted before logout');
+
+  await geoStore.blacklistToken(testToken, 3600);
+  const afterBlacklist = await geoStore.isTokenBlacklisted(testToken);
+  assert(afterBlacklist, 'Token is blacklisted in Redis after logout');
 
   // -------------------------------------------------------------------------
   // TEST SUITE 5: RAZORPAY SPLIT PAYMENT CALCULATION

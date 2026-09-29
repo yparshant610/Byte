@@ -1,6 +1,6 @@
-import { Controller, Get, Param, ParseFloatPipe, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseFloatPipe, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { NearbyRestaurantType, RestaurantType } from '../models/restaurant.models';
+import { GeoIndexRestaurantInput, NearbyRestaurantType, RestaurantType } from '../models/restaurant.models';
 import { RestaurantService } from '../services/restaurant.service';
 
 @ApiTags('Restaurants')
@@ -31,5 +31,15 @@ export class RestaurantController {
   @ApiResponse({ status: 200, type: RestaurantType })
   async getDetails(@Param('id') id: string): Promise<RestaurantType | null> {
     return this.restaurantService.getById(id);
+  }
+
+  @Post('geo-index')
+  @ApiOperation({
+    summary: 'Admin/Merchant Sync: Index or invalidate restaurant in Redis Geospatial engine',
+    description: 'Automatically updates or invalidates coordinates in `restaurants:geo` when operational status or location changes.',
+  })
+  @ApiResponse({ status: 200, schema: { type: 'object', properties: { success: { type: 'boolean' }, action: { type: 'string' } } } })
+  async syncGeoIndex(@Body() body: GeoIndexRestaurantInput) {
+    return this.restaurantService.syncGeoIndex(body);
   }
 }

