@@ -1,0 +1,62 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
+import { useCart } from '../context/CartContext';
+export const CartScreen = ({ onCheckoutSuccess, onContinueShopping, }) => {
+    const { theme } = useTheme();
+    const { cart, updateQuantity, clearCart, checkout } = useCart();
+    const isDark = theme === 'dark';
+    const [promoCode, setPromoCode] = useState('BYTEFIRST');
+    const [promoApplied, setPromoApplied] = useState(true);
+    const [selectedTip, setSelectedTip] = useState(3.00);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const tips = [2.00, 3.00, 5.00];
+    const subtotal = cart?.subtotal || 0;
+    const discount = promoApplied ? parseFloat((subtotal * 0.20).toFixed(2)) : 0;
+    const taxableSubtotal = Math.max(0, subtotal - discount);
+    const taxAmount = parseFloat((taxableSubtotal * 0.05).toFixed(2));
+    const deliveryFee = 2.49;
+    const totalAmount = parseFloat((taxableSubtotal + taxAmount + deliveryFee + selectedTip).toFixed(2));
+    // 80/20 Split Breakdown Calculation
+    const platformCommission = parseFloat(((taxableSubtotal + deliveryFee) * 0.20).toFixed(2));
+    const restaurantPayout = parseFloat((taxableSubtotal * 0.80).toFixed(2));
+    const driverPayout = parseFloat(((deliveryFee * 0.80) + selectedTip).toFixed(2));
+    const vendorDriverTotalPayout = parseFloat((restaurantPayout + driverPayout).toFixed(2));
+    const handleCheckout = async () => {
+        setIsProcessing(true);
+        try {
+            await checkout({
+                deliveryAddress: 'Penthouse 4B, MG Road Boulevard, Bangalore',
+                destinationLat: 12.9716,
+                destinationLng: 77.5946,
+                deliveryNotes: 'Leave with front desk security',
+                driverTip: selectedTip,
+            });
+            onCheckoutSuccess();
+        }
+        finally {
+            setIsProcessing(false);
+        }
+    };
+    if (!cart || cart.items.length === 0) {
+        return (_jsxs("div", { className: `flex flex-col items-center justify-center min-h-[500px] p-6 text-center ${isDark ? 'bg-[#131315] text-white' : 'bg-[#fcf9f8] text-[#1c1b1b]'}`, children: [_jsx("div", { className: "w-20 h-20 rounded-full bg-rose-500/10 text-[#bb0021] dark:text-[#ff1e38] flex items-center justify-center mb-4", children: _jsx("span", { className: "material-symbols-outlined text-[36px]", children: "shopping_bag" }) }), _jsx("h2", { className: "font-extrabold text-lg", children: "Your Cart is Empty" }), _jsx("p", { className: "text-xs opacity-60 mt-1 max-w-xs", children: "Explore delicious dishes from top-rated restaurants and add them to your feast!" }), _jsx("button", { onClick: onContinueShopping, className: "mt-6 px-6 py-3 rounded-full text-xs font-bold text-white bg-[#bb0021] dark:bg-[#ff1e38] shadow-md active:scale-95", children: "Explore Menu" })] }));
+    }
+    return (_jsxs("div", { className: `flex flex-col min-h-full pb-10 ${isDark ? 'bg-[#131315]' : 'bg-[#fcf9f8]'}`, children: [_jsxs("div", { className: `sticky top-0 z-30 px-4 py-3 flex items-center justify-between backdrop-blur-xl border-b ${isDark ? 'bg-[#131315]/90 border-white/[0.08]' : 'bg-[#fcf9f8]/90 border-black/[0.04]'}`, children: [_jsxs("div", { className: "flex items-center gap-2", children: [_jsx("span", { className: "material-symbols-outlined text-[20px] text-[#bb0021] dark:text-[#ff1e38]", children: "shopping_bag" }), _jsx("h1", { className: "font-extrabold text-base", children: "Cart & Summary" })] }), _jsx("button", { onClick: clearCart, className: "text-xs font-bold opacity-60 hover:opacity-100 hover:text-rose-500", children: "Clear" })] }), _jsxs("div", { className: "p-4 flex flex-col gap-4", children: [_jsxs("div", { className: `p-3.5 rounded-2xl border flex items-center justify-between ${isDark ? 'bg-[#1b1b1d] border-white/10' : 'bg-white border-black/10'}`, children: [_jsxs("div", { className: "flex items-center gap-2.5", children: [_jsx("div", { className: "w-10 h-10 rounded-xl bg-rose-500/10 text-[#bb0021] dark:text-[#ff1e38] flex items-center justify-center", children: _jsx("span", { className: "material-symbols-outlined text-[20px]", children: "storefront" }) }), _jsxs("div", { children: [_jsx("h2", { className: "font-extrabold text-sm", children: cart.restaurantName }), _jsx("span", { className: "text-[11px] opacity-60", children: "Delivering in 20-25 mins" })] })] }), _jsx("span", { className: "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500", children: "Open" })] }), _jsxs("div", { className: `p-4 rounded-2xl border flex flex-col gap-3.5 ${isDark ? 'bg-[#1b1b1d] border-white/10' : 'bg-white border-black/10'}`, children: [_jsx("span", { className: "text-xs font-bold uppercase tracking-wider opacity-60", children: "Your Items" }), cart.items.map(item => (_jsxs("div", { className: "flex items-start justify-between gap-3 pb-3 border-b border-black/5 dark:border-white/5 last:border-0 last:pb-0", children: [_jsxs("div", { className: "flex-1", children: [_jsx("h3", { className: "font-extrabold text-sm", children: item.name }), item.selectedOptions && item.selectedOptions.length > 0 && (_jsx("p", { className: "text-[11px] opacity-60 mt-0.5", children: item.selectedOptions.map(o => o.choiceName).join(' • ') })), _jsxs("span", { className: "font-bold text-xs text-[#bb0021] dark:text-[#ff1e38] mt-1 inline-block", children: ["$", item.itemTotal.toFixed(2)] })] }), _jsxs("div", { className: `flex items-center gap-2 px-2.5 py-1 rounded-full ${isDark ? 'bg-[#252528]' : 'bg-[#f0edec]'}`, children: [_jsx("button", { onClick: () => updateQuantity(item.itemId, item.quantity - 1), className: "w-5 h-5 flex items-center justify-center font-bold text-xs", children: "-" }), _jsx("span", { className: "text-xs font-bold", children: item.quantity }), _jsx("button", { onClick: () => updateQuantity(item.itemId, item.quantity + 1), className: "w-5 h-5 flex items-center justify-center font-bold text-xs", children: "+" })] })] }, item.itemId)))] }), _jsxs("div", { className: `p-3.5 rounded-2xl border flex items-center justify-between gap-2 ${isDark ? 'bg-[#1b1b1d] border-white/10' : 'bg-white border-black/10'}`, children: [_jsxs("div", { className: "flex items-center gap-2 flex-1", children: [_jsx("span", { className: "material-symbols-outlined text-amber-500 text-[20px]", children: "local_offer" }), _jsx("input", { type: "text", value: promoCode, onChange: e => setPromoCode(e.target.value.toUpperCase()), placeholder: "ENTER PROMO CODE", className: "bg-transparent text-xs font-bold outline-none uppercase w-full" })] }), _jsx("button", { onClick: () => setPromoApplied(!promoApplied), className: `px-3 py-1 rounded-full text-xs font-bold transition-all ${promoApplied
+                                    ? 'bg-emerald-500/10 text-emerald-500'
+                                    : isDark
+                                        ? 'bg-[#ff1e38] text-white'
+                                        : 'bg-[#bb0021] text-white'}`, children: promoApplied ? 'Applied ✓' : 'Apply' })] }), _jsxs("div", { className: `p-4 rounded-2xl border flex flex-col gap-2.5 ${isDark ? 'bg-[#1b1b1d] border-white/10' : 'bg-white border-black/10'}`, children: [_jsxs("div", { className: "flex items-center justify-between", children: [_jsx("span", { className: "text-xs font-bold", children: "Say Thanks with a Tip" }), _jsx("span", { className: "text-[10px] opacity-60", children: "100% goes to your driver" })] }), _jsxs("div", { className: "grid grid-cols-4 gap-2", children: [tips.map(t => (_jsxs("button", { onClick: () => setSelectedTip(t), className: `py-2 rounded-xl text-xs font-bold border transition-all ${selectedTip === t
+                                            ? isDark
+                                                ? 'border-[#ff1e38] bg-[#ff1e38]/15 text-[#ff1e38]'
+                                                : 'border-[#bb0021] bg-[#bb0021]/10 text-[#bb0021]'
+                                            : isDark
+                                                ? 'border-white/10 bg-[#252528]'
+                                                : 'border-black/10 bg-[#f6f3f2]'}`, children: ["$", t.toFixed(2)] }, t))), _jsxs("button", { onClick: () => setSelectedTip(selectedTip + 1), className: `py-2 rounded-xl text-xs font-bold border transition-all ${!tips.includes(selectedTip)
+                                            ? isDark
+                                                ? 'border-[#ff1e38] bg-[#ff1e38]/15 text-[#ff1e38]'
+                                                : 'border-[#bb0021] bg-[#bb0021]/10 text-[#bb0021]'
+                                            : isDark
+                                                ? 'border-white/10 bg-[#252528]'
+                                                : 'border-black/10 bg-[#f6f3f2]'}`, children: ["+$", selectedTip > 5 ? selectedTip.toFixed(2) : 'Other'] })] })] }), _jsxs("div", { className: `p-4 rounded-2xl border flex flex-col gap-2 text-xs ${isDark ? 'bg-[#1b1b1d] border-white/10' : 'bg-white border-black/10'}`, children: [_jsx("span", { className: "font-bold uppercase tracking-wider opacity-60 mb-1", children: "Bill Details" }), _jsxs("div", { className: "flex justify-between opacity-80", children: [_jsx("span", { children: "Item Subtotal" }), _jsxs("span", { children: ["$", subtotal.toFixed(2)] })] }), promoApplied && (_jsxs("div", { className: "flex justify-between text-emerald-500 font-semibold", children: [_jsx("span", { children: "Promotion (BYTEFIRST 20%)" }), _jsxs("span", { children: ["-$", discount.toFixed(2)] })] })), _jsxs("div", { className: "flex justify-between opacity-80", children: [_jsx("span", { children: "Taxes (5% GST)" }), _jsxs("span", { children: ["$", taxAmount.toFixed(2)] })] }), _jsxs("div", { className: "flex justify-between opacity-80", children: [_jsx("span", { children: "Delivery Fee" }), _jsxs("span", { children: ["$", deliveryFee.toFixed(2)] })] }), _jsxs("div", { className: "flex justify-between opacity-80", children: [_jsx("span", { children: "Driver Tip" }), _jsxs("span", { children: ["$", selectedTip.toFixed(2)] })] }), _jsxs("div", { className: "border-t border-black/10 dark:border-white/10 pt-2.5 mt-1 flex justify-between font-extrabold text-sm", children: [_jsx("span", { children: "To Pay" }), _jsxs("span", { className: "text-[#bb0021] dark:text-[#ff1e38]", children: ["$", totalAmount.toFixed(2)] })] }), _jsxs("div", { className: "mt-3 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 text-[11px] flex flex-col gap-1", children: [_jsxs("span", { className: "font-bold text-[#bb0021] dark:text-[#ff1e38] flex items-center gap-1", children: [_jsx("span", { className: "material-symbols-outlined text-[14px]", children: "account_balance_wallet" }), "Razorpay Route 80/20 Split Transparency"] }), _jsxs("div", { className: "flex justify-between opacity-70", children: [_jsx("span", { children: "Restaurant Payout (80% Food):" }), _jsxs("span", { children: ["$", restaurantPayout.toFixed(2)] })] }), _jsxs("div", { className: "flex justify-between opacity-70", children: [_jsx("span", { children: "Driver Payout (80% Delivery + 100% Tip):" }), _jsxs("span", { children: ["$", driverPayout.toFixed(2)] })] }), _jsxs("div", { className: "flex justify-between opacity-70 font-semibold", children: [_jsx("span", { children: "Byte Add Platform Fee (20%):" }), _jsxs("span", { children: ["$", platformCommission.toFixed(2)] })] })] })] }), _jsxs("button", { onClick: handleCheckout, disabled: isProcessing, className: `w-full py-4 rounded-full font-bold text-sm tracking-wider uppercase text-white shadow-xl flex items-center justify-between px-6 active:scale-95 transition-all ${isDark ? 'bg-[#ff1e38] shadow-[#ff1e38]/30 hover:bg-[#ff344c]' : 'bg-[#bb0021] shadow-[#bb0021]/30 hover:bg-[#d60026]'}`, children: [_jsx("span", { children: isProcessing ? 'Processing Split...' : 'Razorpay Secure Checkout' }), _jsxs("div", { className: "flex items-center gap-1", children: [_jsxs("span", { children: ["$", totalAmount.toFixed(2)] }), _jsx("span", { className: "material-symbols-outlined text-[18px]", children: "arrow_forward" })] })] })] })] }));
+};
+//# sourceMappingURL=CartScreen.js.map
