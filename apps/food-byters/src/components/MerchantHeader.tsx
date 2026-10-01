@@ -12,7 +12,17 @@ export const MerchantHeader: React.FC<MerchantHeaderProps> = ({ onNewItemClick }
     audioChimeEnabled,
     toggleAudioChime,
     triggerIncomingDemoOrder,
+    user,
+    restaurantName,
+    logout,
   } = useMerchant();
+
+  const userInitials = (user?.fullName || 'Tony Romano')
+    .split(' ')
+    .map(w => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <header className="fixed top-0 left-64 xl:left-72 right-0 h-16 bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 flex items-center justify-between px-6 border-b border-surface-container-high">
@@ -105,15 +115,28 @@ export const MerchantHeader: React.FC<MerchantHeaderProps> = ({ onNewItemClick }
 
         <div className="h-5 w-px bg-surface-container-highest" />
 
-        {/* Profile */}
-        <div className="flex items-center gap-2 pl-1">
+        {/* Profile & Logout */}
+        <div className="flex items-center gap-3 pl-1">
           <div className="text-right hidden sm:block">
-            <p className="font-bold text-xs text-on-surface leading-tight">Tony Romano</p>
-            <p className="text-[10px] text-on-surface-variant">Store Owner</p>
+            <p className="font-bold text-xs text-on-surface leading-tight">
+              {user?.fullName || 'Tony Romano'}
+            </p>
+            <p className="text-[10px] text-on-surface-variant truncate max-w-[120px]">
+              {restaurantName}
+            </p>
           </div>
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xs shadow-sm">
-            TR
+            {userInitials}
           </div>
+          <button
+            type="button"
+            onClick={logout}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs transition-colors border border-red-200"
+            title="Sign Out of Kitchen Portal"
+          >
+            <span className="material-symbols-outlined text-[16px]">logout</span>
+            <span className="hidden md:inline">Logout</span>
+          </button>
         </div>
       </div>
     </header>

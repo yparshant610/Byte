@@ -15,6 +15,15 @@ export class UserType {
 
   @Field()
   role: string;
+
+  @Field({ nullable: true })
+  phone?: string;
+
+  @Field({ nullable: true })
+  restaurantId?: string;
+
+  @Field({ nullable: true })
+  restaurantName?: string;
 }
 
 @ObjectType()
@@ -24,6 +33,12 @@ export class AuthPayload {
 
   @Field(() => UserType)
   user: UserType;
+
+  @Field(() => String, { nullable: true })
+  restaurantId?: string;
+
+  @Field(() => String, { nullable: true })
+  restaurantName?: string;
 }
 
 @ObjectType()
@@ -33,20 +48,27 @@ export class OtpResponse {
 
   @Field()
   message: string;
+
+  @Field({ nullable: true })
+  debugOtp?: string;
 }
 
 @InputType()
 export class RequestOtpInput {
   @Field()
-  @ApiProperty({ example: 'consumer@foodbytes.app' })
+  @ApiProperty({ example: 'tony@tonyspizza.com' })
   @IsEmail()
   email: string;
+
+  @Field({ nullable: true })
+  @ApiProperty({ example: 'RESTAURANT_OWNER', required: false })
+  role?: string;
 }
 
 @InputType()
 export class VerifyOtpSignupInput {
   @Field()
-  @ApiProperty({ example: 'consumer@foodbytes.app' })
+  @ApiProperty({ example: 'tony@tonyspizza.com' })
   @IsEmail()
   email: string;
 
@@ -58,18 +80,30 @@ export class VerifyOtpSignupInput {
 
   @Field()
   @ApiProperty({ example: 'SecurePassword123!' })
-  @MinLength(8)
+  @MinLength(6)
   password: string;
 
   @Field({ nullable: true })
-  @ApiProperty({ example: 'Alex Johnson', required: false })
+  @ApiProperty({ example: 'Tony Romano', required: false })
   fullName?: string;
+
+  @Field({ nullable: true })
+  @ApiProperty({ example: '+1 555-010-1002', required: false })
+  phone?: string;
+
+  @Field({ nullable: true })
+  @ApiProperty({ example: 'RESTAURANT_OWNER', required: false })
+  role?: string;
+
+  @Field({ nullable: true })
+  @ApiProperty({ example: "Tony's Artisan Pizza", required: false })
+  restaurantName?: string;
 }
 
 @InputType()
 export class LoginInput {
   @Field()
-  @ApiProperty({ example: 'consumer@foodbytes.app' })
+  @ApiProperty({ example: 'tony@tonyspizza.com' })
   @IsEmail()
   email: string;
 

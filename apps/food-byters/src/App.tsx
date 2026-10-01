@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MerchantProvider } from './context/MerchantContext';
+import { MerchantProvider, useMerchant } from './context/MerchantContext';
 import { MerchantSidebar } from './components/MerchantSidebar';
 import { MerchantHeader } from './components/MerchantHeader';
 import { OperationalDashboardView } from './views/OperationalDashboardView';
@@ -8,9 +8,15 @@ import { MenuInventoryCrudView } from './views/MenuInventoryCrudView';
 import { PayoutsFinancialsView } from './views/PayoutsFinancialsView';
 import { OrderHistoryLogsView } from './views/OrderHistoryLogsView';
 import { NotificationsCenterView } from './views/NotificationsCenterView';
+import { MerchantAuthView } from './views/MerchantAuthView';
 
 const FoodBytersInner: React.FC = () => {
+  const { isAuthenticated } = useMerchant();
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
+
+  if (!isAuthenticated) {
+    return <MerchantAuthView />;
+  }
 
   const renderContent = () => {
     switch (currentTab) {

@@ -1,14 +1,104 @@
 import React, { useState } from 'react';
+import { useAdmin } from '../context/AdminContext';
+
+export interface CommissionTier {
+  id: 'starter' | 'flagship' | 'enterprise';
+  name: string;
+  badge: string;
+  badgeClass: string;
+  rate: number;
+  label: string;
+  description: string;
+  features: string[];
+  isPopular?: boolean;
+}
+
+export const TIERS: CommissionTier[] = [
+  {
+    id: 'starter',
+    name: 'Starter Partner Tier',
+    badge: 'Entry',
+    badgeClass: 'bg-surface-container text-on-surface',
+    rate: 15,
+    label: 'Take Rate',
+    description: 'Designed for new kitchen entrants under $15k monthly volume. Includes free basic POS integration.',
+    features: [
+      'Standard Delivery Radius (5km)',
+      'Weekly ACH Settlements',
+      'Basic Performance Analytics',
+    ],
+  },
+  {
+    id: 'flagship',
+    name: 'Flagship Partner Tier',
+    badge: 'Most Popular',
+    badgeClass: 'bg-primary text-on-primary',
+    rate: 18,
+    label: 'Take Rate',
+    description: 'For high-volume artisan restaurants between $15k - $50k monthly volume. Priority driver dispatch.',
+    features: [
+      'Expanded 10km Discovery Range',
+      'Daily Auto-Settlement at 10 AM',
+      'Priority Courier Dispatch',
+    ],
+    isPopular: true,
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise / Chain Tier',
+    badge: 'Multi-Unit',
+    badgeClass: 'bg-secondary-container text-on-secondary-container',
+    rate: 20,
+    label: 'Standard Ecosystem',
+    description: 'Default automated multi-split contract with marketing boost, dedicated courier fleet queue, and API POS webhooks.',
+    features: [
+      'Full Razorpay Route API Automation',
+      'Custom Promo & Loyalty Sponsorship',
+      'Dedicated 24/7 SLA Support',
+    ],
+  },
+];
 
 export const CommissionFinancialRulesView: React.FC = () => {
+  const { financialStats } = useAdmin();
+
+  // Tier Selection State (persisted to localStorage)
+  const [selectedTier, setSelectedTier] = useState<'starter' | 'flagship' | 'enterprise'>(() => {
+    return (localStorage.getItem('byte_admin_commission_tier') as any) || 'flagship';
+  });
+
+  // Simulator State
   const [simGmv, setSimGmv] = useState<number>(50000);
-  const [simTakeRate, setSimTakeRate] = useState<number>(20);
+  const [simTakeRate, setSimTakeRate] = useState<number>(() => {
+    const saved = localStorage.getItem('byte_admin_commission_tier');
+    if (saved === 'starter') return 15;
+    if (saved === 'enterprise') return 20;
+    return 18;
+  });
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleSelectTier = (tier: CommissionTier) => {
+    setSelectedTier(tier.id);
+    setSimTakeRate(tier.rate);
+    localStorage.setItem('byte_admin_commission_tier', tier.id);
+    setToastMessage(`Switched active contract to ${tier.name} (${tier.rate}% Take Rate)`);
+    setTimeout(() => setToastMessage(null), 3200);
+  };
 
   const projectedCommission = (simGmv * (simTakeRate / 100)).toFixed(2);
   const projectedMerchantNet = (simGmv * ((100 - simTakeRate) / 100)).toFixed(2);
 
   return (
-    <div className="flex flex-col w-full gap-6 pb-12">
+    <div className="flex flex-col w-full gap-6 pb-12 relative">
+      {/* Toast Feedback */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-on-surface text-surface py-3 px-5 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-bold animate-bounce border border-surface-container-high">
+          <span className="material-symbols-outlined text-[18px] text-tertiary">check_circle</span>
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <div className="flex items-center gap-1.5 text-primary text-[11px] font-bold uppercase tracking-wider mb-1">
@@ -29,11 +119,11 @@ export const CommissionFinancialRulesView: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">30-Day Take Rate</span>
             <span className="px-2 py-0.5 rounded-full bg-tertiary/10 text-tertiary text-xs font-bold">
-              +0.4%
+              Target
             </span>
           </div>
           <div className="mt-3">
-            <div className="text-3xl font-black text-on-surface">15.4%</div>
+            <div className="text-3xl font-black text-on-surface">{financialStats.effectiveTakeRate}%</div>
             <p className="text-[11px] text-on-surface-variant mt-0.5">Effective Margin on Gross Volume</p>
           </div>
         </div>
@@ -44,8 +134,8 @@ export const CommissionFinancialRulesView: React.FC = () => {
             <span className="text-xs font-bold text-on-surface-variant">Active GMV</span>
           </div>
           <div className="mt-3">
-            <div className="text-3xl font-black text-on-surface">$1,420,850</div>
-            <p className="text-[11px] text-on-surface-variant mt-0.5">342 Registered Kitchens</p>
+            <div className="text-3xl font-black text-on-surface">${financialStats.grossMerchantSales.toLocaleString()}</div>
+            <p className="text-[11px] text-on-surface-variant mt-0.5">{financialStats.registeredKitchensCount} Registered Kitchens</p>
           </div>
         </div>
 
@@ -57,8 +147,8 @@ export const CommissionFinancialRulesView: React.FC = () => {
             </span>
           </div>
           <div className="mt-3">
-            <div className="text-3xl font-black text-primary">$218,810</div>
-            <p className="text-[11px] text-on-surface-variant mt-0.5">Platform multi-split fee</p>
+            <div className="text-3xl font-black text-primary">${financialStats.netPlatformCommission.toLocaleString()}</div>
+            <p className="text-[11px] text-on-surface-variant mt-0.5">Platform multi-split fee (20%)</p>
           </div>
         </div>
 
@@ -68,105 +158,99 @@ export const CommissionFinancialRulesView: React.FC = () => {
             <span className="text-xs font-bold text-tertiary">Direct Settlement</span>
           </div>
           <div className="mt-3">
-            <div className="text-3xl font-black text-tertiary">84.6%</div>
-            <p className="text-[11px] text-on-surface-variant mt-0.5">$1,202,039 settled to stores</p>
+            <div className="text-3xl font-black text-tertiary">{financialStats.merchantRetainedRate}%</div>
+            <p className="text-[11px] text-on-surface-variant mt-0.5">${financialStats.merchantRetainedAmount.toLocaleString()} settled to stores</p>
           </div>
         </div>
       </div>
 
-      {/* Standard Contracts Tiers (3 Tiers) */}
+      {/* Standard Contracts Tiers (3 Selectable Tiers) */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-primary" />
             <h2 className="text-base font-extrabold text-on-surface">Standard Partner Commission Contracts</h2>
           </div>
-          <span className="text-xs text-on-surface-variant">Automated tier promotion applies on 1st of every calendar month</span>
+          <span className="text-xs text-on-surface-variant">Click any tier card below to select as active contract</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Tier 1 */}
-          <div className="p-5 rounded-2xl bg-surface-container-lowest shadow-sm border border-surface-container-high space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-base text-on-surface">Starter Partner Tier</span>
-              <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface font-bold text-xs">
-                Entry
-              </span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-black text-primary">15%</span>
-              <span className="text-xs text-on-surface-variant font-semibold">Take Rate</span>
-            </div>
-            <p className="text-xs text-on-surface-variant leading-relaxed">
-              Designed for new kitchen entrants under $15k monthly volume. Includes free basic POS integration.
-            </p>
-            <div className="pt-2 border-t border-surface-container text-xs text-on-surface space-y-1">
-              <div className="flex items-center gap-1.5 text-tertiary font-bold">
-                <span className="material-symbols-outlined text-[16px]">check</span>
-                <span>Standard Delivery Radius (5km)</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-tertiary font-bold">
-                <span className="material-symbols-outlined text-[16px]">check</span>
-                <span>Weekly ACH Settlements</span>
-              </div>
-            </div>
-          </div>
+          {TIERS.map(tier => {
+            const isSelected = selectedTier === tier.id;
 
-          {/* Tier 2 */}
-          <div className="p-5 rounded-2xl bg-surface-container-lowest shadow-sm border-2 border-primary ring-2 ring-primary/10 space-y-3 relative overflow-hidden">
-            <div className="absolute top-2 right-2">
-              <span className="px-2 py-0.5 rounded-full bg-primary text-on-primary text-[10px] font-bold uppercase">
-                Most Popular
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-base text-on-surface">Flagship Partner Tier</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-black text-primary">18%</span>
-              <span className="text-xs text-on-surface-variant font-semibold">Take Rate</span>
-            </div>
-            <p className="text-xs text-on-surface-variant leading-relaxed">
-              For high-volume artisan restaurants between $15k - $50k monthly volume. Priority driver dispatch.
-            </p>
-            <div className="pt-2 border-t border-surface-container text-xs text-on-surface space-y-1">
-              <div className="flex items-center gap-1.5 text-tertiary font-bold">
-                <span className="material-symbols-outlined text-[16px]">check</span>
-                <span>Expanded 10km Discovery Range</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-tertiary font-bold">
-                <span className="material-symbols-outlined text-[16px]">check</span>
-                <span>Daily Auto-Settlement at 10 AM</span>
-              </div>
-            </div>
-          </div>
+            return (
+              <div
+                key={tier.id}
+                onClick={() => handleSelectTier(tier)}
+                className={`p-5 rounded-2xl transition-all cursor-pointer flex flex-col justify-between relative overflow-hidden ${
+                  isSelected
+                    ? 'bg-surface-container-lowest shadow-lg border-2 border-primary ring-4 ring-primary/10 scale-[1.01]'
+                    : 'bg-surface-container-lowest shadow-sm border border-surface-container-high hover:border-primary/40 hover:shadow-md hover:bg-surface-container-low/30'
+                }`}
+              >
+                {/* Top Badge Indicators */}
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-base text-on-surface">{tier.name}</span>
+                    {isSelected && (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                        Selected
+                      </span>
+                    )}
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full font-bold text-[11px] uppercase tracking-wider ${tier.badgeClass}`}>
+                    {tier.badge}
+                  </span>
+                </div>
 
-          {/* Tier 3 */}
-          <div className="p-5 rounded-2xl bg-surface-container-lowest shadow-sm border border-surface-container-high space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-base text-on-surface">Enterprise / Chain Tier</span>
-              <span className="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-bold text-xs">
-                Multi-Unit
-              </span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-black text-secondary">20%</span>
-              <span className="text-xs text-on-surface-variant font-semibold">Standard Ecosystem</span>
-            </div>
-            <p className="text-xs text-on-surface-variant leading-relaxed">
-              Default automated multi-split contract with marketing boost, dedicated courier fleet queue, and API POS webhooks.
-            </p>
-            <div className="pt-2 border-t border-surface-container text-xs text-on-surface space-y-1">
-              <div className="flex items-center gap-1.5 text-tertiary font-bold">
-                <span className="material-symbols-outlined text-[16px]">check</span>
-                <span>Full Razorpay Route API Automation</span>
+                {/* Rate Info */}
+                <div className="space-y-3">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className={`text-3xl font-black ${isSelected ? 'text-primary' : 'text-on-surface'}`}>
+                      {tier.rate}%
+                    </span>
+                    <span className="text-xs text-on-surface-variant font-semibold">{tier.label}</span>
+                  </div>
+
+                  <p className="text-xs text-on-surface-variant leading-relaxed min-h-[36px]">
+                    {tier.description}
+                  </p>
+
+                  {/* Feature checklist */}
+                  <div className="pt-3 border-t border-surface-container text-xs text-on-surface space-y-1.5">
+                    {tier.features.map(f => (
+                      <div key={f} className="flex items-center gap-1.5 text-tertiary font-bold">
+                        <span className="material-symbols-outlined text-[16px]">check</span>
+                        <span>{f}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action / Select Button */}
+                <div className="mt-5 pt-3 border-t border-surface-container">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectTier(tier);
+                    }}
+                    className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm ${
+                      isSelected
+                        ? 'bg-primary text-on-primary shadow-md shadow-primary/20'
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">
+                      {isSelected ? 'check_circle' : 'radio_button_unchecked'}
+                    </span>
+                    <span>{isSelected ? 'Active Selected Plan' : 'Select This Plan'}</span>
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 text-tertiary font-bold">
-                <span className="material-symbols-outlined text-[16px]">check</span>
-                <span>Custom Promo & Loyalty Sponsorship</span>
-              </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </div>
 
@@ -175,7 +259,9 @@ export const CommissionFinancialRulesView: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-extrabold text-on-surface">Platform Split & Revenue Simulator</h3>
-            <p className="text-xs text-on-surface-variant">Forecast platform earnings and merchant payouts in real-time</p>
+            <p className="text-xs text-on-surface-variant">
+              Forecast platform earnings and merchant payouts in real-time (Linked to active contract tier)
+            </p>
           </div>
           <span className="material-symbols-outlined text-primary text-[24px]">calculate</span>
         </div>
@@ -201,7 +287,14 @@ export const CommissionFinancialRulesView: React.FC = () => {
 
             <div>
               <div className="flex justify-between text-xs font-bold mb-1">
-                <span>Contract Commission Rate</span>
+                <div className="flex items-center gap-1.5">
+                  <span>Contract Commission Rate</span>
+                  {TIERS.find(t => t.rate === simTakeRate) && (
+                    <span className="px-1.5 py-0.2 rounded bg-primary/10 text-primary text-[10px] font-bold">
+                      {TIERS.find(t => t.rate === simTakeRate)?.name}
+                    </span>
+                  )}
+                </div>
                 <span className="text-primary font-black">{simTakeRate}%</span>
               </div>
               <input
@@ -210,7 +303,12 @@ export const CommissionFinancialRulesView: React.FC = () => {
                 max="30"
                 step="1"
                 value={simTakeRate}
-                onChange={e => setSimTakeRate(parseInt(e.target.value))}
+                onChange={e => {
+                  const val = parseInt(e.target.value);
+                  setSimTakeRate(val);
+                  const matched = TIERS.find(t => t.rate === val);
+                  if (matched) setSelectedTier(matched.id);
+                }}
                 className="w-full accent-primary"
               />
             </div>

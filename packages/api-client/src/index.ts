@@ -269,17 +269,25 @@ export class FoodByteApiClient {
   }
 
   // --- Auth APIs ---
-  async signup(email: string, role: Role = 'CONSUMER'): Promise<{ message: string; otpId?: string }> {
+  async signup(email: string, role: Role = 'RESTAURANT_OWNER'): Promise<{ success: boolean; message: string; debugOtp?: string }> {
     return this.request('/auth/signup', {
       method: 'POST',
       body: JSON.stringify({ email, role }),
     });
   }
 
-  async verifyOtp(email: string, otp: string): Promise<{ accessToken: string; user: User }> {
-    const res = await this.request<{ accessToken: string; user: User }>('/auth/verify-otp', {
+  async verifyOtp(
+    payload: string | { email: string; otp: string; password?: string; fullName?: string; phone?: string; role?: Role; restaurantName?: string },
+    legacyOtp?: string,
+  ): Promise<{ accessToken: string; user: User; restaurantId?: string; restaurantName?: string }> {
+    const body =
+      typeof payload === 'string'
+        ? { email: payload, otp: legacyOtp || '', password: 'SecurePassword123!' }
+        : { password: 'SecurePassword123!', ...payload };
+
+    const res = await this.request<{ accessToken: string; user: User; restaurantId?: string; restaurantName?: string }>('/auth/verify-otp', {
       method: 'POST',
-      body: JSON.stringify({ email, otp }),
+      body: JSON.stringify(body),
     });
     if (res?.accessToken && res?.user) {
       this.setAuth(res.accessToken, res.user.id, res.user.role);
@@ -287,10 +295,10 @@ export class FoodByteApiClient {
     return res;
   }
 
-  async signin(email: string, role: Role = 'CONSUMER'): Promise<{ accessToken: string; user: User }> {
-    const res = await this.request<{ accessToken: string; user: User }>('/auth/signin', {
+  async signin(email: string, password = 'SecurePassword123!'): Promise<{ accessToken: string; user: User; restaurantId?: string; restaurantName?: string }> {
+    const res = await this.request<{ accessToken: string; user: User; restaurantId?: string; restaurantName?: string }>('/auth/signin', {
       method: 'POST',
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email, password }),
     });
     if (res?.accessToken && res?.user) {
       this.setAuth(res.accessToken, res.user.id, res.user.role);
@@ -313,6 +321,69 @@ export class FoodByteApiClient {
 
   async getRestaurantById(id: string): Promise<Restaurant> {
     return this.request(`/restaurants/${id}`);
+  }
+
+  async getRestaurantMenu(restaurantId: string): Promise<any[]> {
+    return this.request(`/restaurants/${restaurantId}/menu`);
+  }
+
+  async createMenuItem(restaurantId: string, item: any): Promise<any> {
+    return this.request(`/restaurants/${restaurantId}/menu/items`, {
+      method: 'POST',
+      body: JSON.stringify(item),
+    });
+  }
+
+  async toggleMenuItemAvailability(restaurantId: string, itemId: string, isAvailable: boolean): Promise<{ success: boolean; itemId: string; isAvailable: boolean }> {
+    return this.request(`/restaurants/${restaurantId}/menu/items/${itemId}/availability`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isAvailable }),
+    });
+  }
+
+  async updateMenuItem(restaurantId: string, itemId: string, item: any): Promise<any> {
+    return this.request(`/restaurants/${restaurantId}/menu/items/${itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(item),
+    });
+  }
+
+  async getMenuImageUploadUrl(
+    restaurantId: string,
+    fileName: string,
+    contentType: string,
+  ): Promise<{ uploadUrl: string; fileKey: string; publicUrl: string; bucket: string; region: string }> {
+    return this.request(`/restaurants/${restaurantId}/menu/upload-url`, {
+      method: 'POST',
+      body: JSON.stringify({ fileName, contentType }),
+    });
+  }
+
+  async verifyMenuImageUpload(
+    restaurantId: string,
+    fileKey: string,
+  ): Promise<{ verified: boolean; fileKey: string; publicUrl: string; message: string }> {
+    return this.request(`/restaurants/${restaurantId}/menu/verify-upload`, {
+      method: 'POST',
+      body: JSON.stringify({ fileKey }),
+    });
+  }
+
+  async deleteMenuItem(restaurantId: string, itemId: string): Promise<{ success: boolean }> {
+    return this.request(`/restaurants/${restaurantId}/menu/items/${itemId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateRestaurantSettings(restaurantId: string, settings: { isOpen?: boolean; prepBuffer?: number }): Promise<{ success: boolean; settings: any }> {
+    return this.request(`/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async getRestaurantPayouts(restaurantId: string): Promise<any[]> {
+    return this.request(`/restaurants/${restaurantId}/payouts`);
   }
 
   // --- Cart APIs ---
@@ -417,6 +488,60 @@ export class FoodByteApiClient {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  // --- Admin Governance & Operations APIs ---
+  async getAdminMerchants(): Promise<any[]> {
+    return this.request('/admin/merchants');
+  }
+
+  async updateAdminMerchantStatus(id: string, status: 'ACTIVE' | 'PENDING' | 'SUSPENDED'): Promise<any> {
+    return this.request(`/admin/merchants/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async updateAdminMerchantCommission(id: string, commissionRate: number): Promise<{ success: boolean; commissionRate: number }> {
+    return this.request(`/admin/merchants/${id}/commission`, {
+      method: 'PATCH',
+      body: JSON.stringify({ commissionRate }),
+    });
+  }
+
+  async getAdminDrivers(): Promise<any[]> {
+    return this.request('/admin/drivers');
+  }
+
+  async updateAdminDriverStatus(id: string, payload: { kycStatus?: string; dutyStatus?: string }): Promise<any> {
+    return this.request(`/admin/drivers/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getAdminDisputes(): Promise<any[]> {
+    return this.request('/admin/disputes');
+  }
+
+  async resolveAdminDispute(
+    id: string,
+    action: 'REFUND' | 'REJECT',
+    refundAmount?: number,
+    notes?: string,
+  ): Promise<any> {
+    return this.request(`/admin/disputes/${id}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ action, refundAmount, notes }),
+    });
+  }
+
+  async getAdminFinancialStats(): Promise<any> {
+    return this.request('/admin/financial-stats');
+  }
+
+  async seedAdminMockData(): Promise<{ success: boolean; message: string }> {
+    return this.request('/admin/seed', { method: 'POST' });
   }
 }
 

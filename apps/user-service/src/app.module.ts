@@ -9,6 +9,7 @@ import { OrderModule } from './modules/order/order.module';
 import { MailModule } from './modules/mail/mail.module';
 import { RedisProviderModule } from './modules/redis/redis-provider.module';
 import { RestaurantModule } from './modules/restaurant/restaurant.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { RestaurantModule } from './modules/restaurant/restaurant.module';
     CartModule,
     DispatchModule,
     OrderModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

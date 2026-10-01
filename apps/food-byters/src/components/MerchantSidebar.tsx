@@ -10,7 +10,7 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
   currentTab,
   setCurrentTab,
 }) => {
-  const { restaurantName, activeOrders, isOpen } = useMerchant();
+  const { restaurantName, activeOrders, isOpen, logout } = useMerchant();
 
   const pendingCount = activeOrders.filter(o => o.status === 'PENDING').length;
   const inKitchenCount = activeOrders.filter(o => o.status === 'PREPARING').length;
@@ -111,6 +111,15 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
         >
           <span className="material-symbols-outlined text-[18px]">tune</span>
           <span>Store Settings</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={logout}
+          className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-red-600 hover:bg-red-50 text-xs font-bold transition-colors w-full"
+        >
+          <span className="material-symbols-outlined text-[18px]">logout</span>
+          <span>Sign Out / Log Out</span>
         </button>
 
         <div className="pt-2 border-t border-surface-container-high">
